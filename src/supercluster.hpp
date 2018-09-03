@@ -16,16 +16,17 @@
 
 #include "kdbush.hpp"
 
-using Point = std::pair<double, double>;
+using Point = std::tuple<double, double, std::size_t>;
 
 class Cluster {
 public:
-    Cluster(const Point &_point, size_t _numPoints, size_t _id, int _expansionZoom);
+    Cluster(const Point &_point, size_t _numPoints, size_t _id, int _expansionZoom, std::vector<size_t> children={});
     Point point;
     size_t numPoints;
     size_t id;
     int zoom;
     int expansionZoom;
+    std::vector<size_t> children;
 };
 
 

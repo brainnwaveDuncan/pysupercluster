@@ -19,12 +19,13 @@
 #include "supercluster.hpp"
 
 
-Cluster::Cluster(const Point &_point, size_t _numPoints, size_t _id, int _expansionZoom)
+Cluster::Cluster(const Point &_point, size_t _numPoints, size_t _id, int _expansionZoom, std::vector<size_t> children)
     : point(_point)
     , numPoints(_numPoints)
     , id(_id)
     , zoom(999)
     , expansionZoom(_expansionZoom)
+    , children(children)
 {
 }
 
@@ -58,7 +59,7 @@ SuperCluster::SuperCluster(const std::vector<Point> &points, int _minZoom, int _
     std::vector<Cluster*> clusters;
     clusters.reserve(points.size());
     for (size_t i = 0; i < points.size(); ++i)
-        clusters.push_back(new Cluster(points[i], 1, i, -1));
+        clusters.push_back(new Cluster(points[i], 1, i, -1, {std::get<2>(points[i])}));
     all_clusters = clusters;
 
     for (int z = maxZoom; z >= minZoom; --z) {
@@ -94,22 +95,26 @@ std::vector<Cluster*> SuperCluster::cluster(const std::vector<Cluster*> &points,
 
         bool foundNeighbors = false;
         size_t numPoints = p->numPoints;
-        double wx = p->point.first * numPoints;
-        double wy = p->point.second * numPoints;
+        double wx = std::get<0>(p->point) * numPoints;
+        double wy = std::get<1>(p->point) * numPoints;
+        std::vector<size_t> children(p->children.begin(), p->children.end());
 
-        tree->kdbush->within(p->point.first, p->point.second, radius, [&foundNeighbors, &numPoints, tree, &wx, &wy, zoom](const std::vector<Cluster*>::size_type id) {
+        tree->kdbush->within(std::get<0>(p->point), std::get<1>(p->point), radius, [&children, &foundNeighbors, &numPoints, tree, &wx, &wy, zoom](const std::vector<Cluster*>::size_type id) {
             Cluster *b = tree->clusters[id];
             if (zoom < b->zoom) {
                 foundNeighbors = true;
                 b->zoom = zoom;
-                wx += b->point.first * b->numPoints;
-                wy += b->point.second * b->numPoints;
+                wx += std::get<0>(b->point) * b->numPoints;
+                wy += std::get<1>(b->point) * b->numPoints;
                 numPoints += b->numPoints;
+                children.insert(children.end(), b->children.begin(), b->children.end());
             }
         });
 
         if (foundNeighbors) {
-            Cluster *cluster = new Cluster(Point(wx / numPoints, wy / numPoints), numPoints, all_clusters.size(), zoom + 1);
+            //std::vector<const char*> children;
+            //std::for_each(points.begin(), points.end(), [&](auto i){const auto& temp = i->children; children.insert(children.end(), temp.begin(), temp.end());});
+            Cluster *cluster = new Cluster(Point(wx / numPoints, wy / numPoints), numPoints, all_clusters.size(), zoom + 1, children);
             clusters.push_back(cluster);
             all_clusters.push_back(cluster);
         } else {
@@ -127,7 +132,7 @@ std::vector<Cluster*> SuperCluster::getClusters(const Point &min_p, const Point 
     std::vector<Cluster*> clusters;
 
     ClusterTree *tree = trees[z];
-    tree->kdbush->range(min_p.first, min_p.second, max_p.first, max_p.second, [&clusters, &tree](const std::vector<Cluster*>::size_type id) {
+    tree->kdbush->range(std::get<0>(min_p), std::get<1>(min_p), std::get<0>(max_p), std::get<1>(max_p), [&clusters, &tree](const std::vector<Cluster*>::size_type id) {
         clusters.push_back(tree->clusters[id]);
     });
 

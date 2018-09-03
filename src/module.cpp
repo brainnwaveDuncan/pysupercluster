@@ -23,6 +23,7 @@
 #include <cmath>
 #include "supercluster.hpp"
 
+#include <iostream>
 
 static double lngX(double lng) {
     return lng / 360.0 + 0.5;
@@ -72,8 +73,8 @@ SuperCluster_init(SuperClusterObject *self, PyObject *args, PyObject *kwargs)
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O!|iidd", const_cast<char **>(kwlist), &PyArray_Type, &points,
                                      &min_zoom, &max_zoom, &radius, &extent))
         return -1;
-
-    if (PyArray_DESCR(points)->type_num != NPY_DOUBLE || PyArray_NDIM(points) != 2 || PyArray_DIMS(points)[1] != 2) {
+    
+    if (PyArray_DESCR(points)->type_num != NPY_DOUBLE || PyArray_NDIM(points) != 2) {
         PyErr_SetString(PyExc_ValueError, "Array must be of type double and 2 dimensional.");
         return -1;
     }
@@ -81,9 +82,11 @@ SuperCluster_init(SuperClusterObject *self, PyObject *args, PyObject *kwargs)
     npy_intp count = PyArray_DIMS(points)[0];
     std::vector<Point> items(count);
     for (npy_intp i = 0; i < count; ++i) {
-        items[i] = std::make_pair(
+        items[i] = {
             lngX(*(double*)PyArray_GETPTR2(points, i, 0)),
-            latY(*(double*)PyArray_GETPTR2(points, i, 1)));
+            latY(*(double*)PyArray_GETPTR2(points, i, 1)),
+            i
+        };
     }
     self->sc = new SuperCluster(items, min_zoom, max_zoom, radius, extent);
 
@@ -108,16 +111,16 @@ SuperCluster_getClusters(SuperClusterObject *self, PyObject *args, PyObject *kwa
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "(dd)(dd)i", const_cast<char **>(kwlist), &minLng, &minLat, &maxLng, &maxLat, &zoom))
         return NULL;
 
-    std::vector<Cluster*> clusters = self->sc->getClusters(
-        std::make_pair(lngX(minLng), latY(minLat)),
-        std::make_pair(lngX(maxLng), latY(maxLat)),
-        zoom);
+    std::vector<Cluster*> clusters = self->sc->getClusters({lngX(minLng), latY(minLat), 0},
+                                                           {lngX(maxLng), latY(maxLat), 0},
+                                                           zoom);
 
     PyObject *countKey = PyUnicode_FromString("count");
     PyObject *expansionZoomKey = PyUnicode_FromString("expansion_zoom");
     PyObject *idKey = PyUnicode_FromString("id");
     PyObject *latitudeKey = PyUnicode_FromString("latitude");
     PyObject *longitudeKey = PyUnicode_FromString("longitude");
+    PyObject *childrenKey = PyUnicode_FromString("children");
 
     PyObject *list = PyList_New(clusters.size());
     for (size_t i = 0; i < clusters.size(); ++i) {
@@ -127,8 +130,16 @@ SuperCluster_getClusters(SuperClusterObject *self, PyObject *args, PyObject *kwa
         PyDict_SetItem(dict, countKey, PyLong_FromSize_t(cluster->numPoints));
         PyDict_SetItem(dict, expansionZoomKey, cluster->expansionZoom >= 0 ? PyLong_FromSize_t(cluster->expansionZoom) : Py_None);
         PyDict_SetItem(dict, idKey, PyLong_FromSize_t(cluster->id));
-        PyDict_SetItem(dict, latitudeKey, PyFloat_FromDouble(yLat(cluster->point.second)));
-        PyDict_SetItem(dict, longitudeKey, PyFloat_FromDouble(xLng(cluster->point.first)));
+        PyDict_SetItem(dict, latitudeKey, PyFloat_FromDouble(yLat(std::get<1>(cluster->point))));
+        PyDict_SetItem(dict, longitudeKey, PyFloat_FromDouble(xLng(std::get<0>(cluster->point))));
+
+        PyObject *children_list = PyList_New(clusters[i]->children.size());
+        auto j = 0;
+        for(auto c : clusters[i]->children) {
+            PyList_SET_ITEM(children_list, j, PyLong_FromSsize_t(c));
+            j++;
+        }
+        PyDict_SetItem(dict, childrenKey, children_list);
 
         PyList_SET_ITEM(list, i, dict);
     }
