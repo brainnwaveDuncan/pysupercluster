@@ -112,9 +112,7 @@ std::vector<Cluster*> SuperCluster::cluster(const std::vector<Cluster*> &points,
         });
 
         if (foundNeighbors) {
-            //std::vector<const char*> children;
-            //std::for_each(points.begin(), points.end(), [&](auto i){const auto& temp = i->children; children.insert(children.end(), temp.begin(), temp.end());});
-            Cluster *cluster = new Cluster(Point(wx / numPoints, wy / numPoints), numPoints, all_clusters.size(), zoom + 1, children);
+            Cluster *cluster = new Cluster(Point(wx / numPoints, wy / numPoints, 0), numPoints, all_clusters.size(), zoom + 1, children);
             clusters.push_back(cluster);
             all_clusters.push_back(cluster);
         } else {
